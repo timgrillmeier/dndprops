@@ -1,0 +1,1172 @@
+<!doctype html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DM Mob Forge</title>
+  <!-- Bootstrap 5 (CSS + JS at bottom) -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Bootstrap Icons (optional) -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+
+  <style>
+    :root {
+      --accent: #7bdcb5;
+      --muted: #9aa0a6;
+    }
+    body {
+      min-height: 100vh;
+      background: radial-gradient(1200px 800px at 10% -20%, rgba(123, 220, 181, .06), transparent) no-repeat,
+                  radial-gradient(1000px 900px at 90% 120%, rgba(123, 220, 181, .05), transparent) no-repeat;
+    }
+    .navbar-brand b { letter-spacing: .5px; }
+    .form-hint { font-size:.85rem; color: var(--muted); }
+    .chip {
+      display:inline-flex; align-items:center; gap:.35rem;
+      padding:.15rem .5rem; border-radius:999px; background:#1f2328; border:1px solid #2a2f36; font-size:.8rem;
+    }
+    .chip .bi { font-size:.9rem; }
+    .stat {
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      width:64px; padding:.25rem; border-radius:.5rem; border:1px solid #2c3138; background:#15181c;
+    }
+    .stat .v { font-weight:700; font-size:1.05rem; }
+    .stat .m { color:var(--muted); font-size:.8rem; }
+    .mob-card { border:1px solid #2a2f36; background:#0f1114; }
+    .mob-card h3 { font-size:1.125rem; }
+    .hp-input { width:85px; }
+    .small-input { width:80px; }
+    .tight-input { width:64px; }
+    .monosmall { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size:.95rem; }
+    .toast-overlay {
+      position:fixed; right:1rem; top:4.5rem; z-index:1080; display:flex; flex-direction:column; gap:.5rem; width:min(480px, 92vw);
+    }
+    .toast .progress { height:.2rem; }
+    .kbd { border:1px solid #2a2f36; padding:.1rem .35rem; border-radius:.25rem; background:#0b0d10; font-family:inherit; }
+    .list-divider {
+      height:1px; background:linear-gradient(to right, transparent, #2a2f36 30%, #2a2f36 70%, transparent);
+      margin:1rem 0;
+    }
+    .pill {
+      border:1px solid #2a2f36; border-radius:999px; padding:.15rem .5rem; font-size:.8rem; background:#0f1114;
+    }
+    .strike-dead { text-decoration: line-through; color:#7c8794; }
+    .inventory-list { list-style:none; padding-left:1rem; }
+    .inventory-list li::marker { content:""; }
+    .pointer { cursor:pointer; }
+    .tooltip-inner { text-align:left; }
+    /* Scrollbars for the mobs area */
+    #mobsArea { max-height: calc(100vh - 260px); overflow:auto; padding-bottom:1rem; }
+    /* Initiative order sticky header */
+    .sticky-top-2 { position:sticky; top:4rem; z-index: 5; background:rgba(10,12,15,.85); backdrop-filter: blur(3px); }
+    /* Compact table */
+    .table-smaller td, .table-smaller th { padding:.25rem .5rem; }
+  </style>
+</head>
+<body>
+
+  <!-- ===== Top Nav ===== -->
+  <nav class="navbar navbar-expand-lg border-bottom border-secondary-subtle sticky-top" style="backdrop-filter: blur(6px); background:rgba(10,12,15,.9);">
+    <div class="container-fluid">
+      <a class="navbar-brand d-flex align-items-center gap-2" href="#">
+        <i class="bi bi-shield-shaded text-success"></i>
+        <span>DM <b>Mob Forge</b></span>
+        <span class="pill ms-2 monosmall">Single-file</span>
+      </a>
+
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#topbar" aria-controls="topbar" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+
+      <div class="collapse navbar-collapse" id="topbar">
+        <!-- API Key + Generate -->
+        <form class="d-flex align-items-end gap-2 ms-auto order-lg-2 mt-3 mt-lg-0" onsubmit="return false;">
+          <div>
+            <label class="form-label m-0">OpenAI API key</label>
+            <input id="apiKey" type="password" class="form-control form-control-sm" placeholder="sk-..." autocomplete="off">
+            <div class="form-hint">Stored in a cookie on this device.</div>
+          </div>
+          <div class="d-flex gap-2">
+            <button id="btnSaveKey" class="btn btn-outline-secondary btn-sm" type="button"><i class="bi bi-key"></i> Save</button>
+            <button id="btnForgetKey" class="btn btn-outline-warning btn-sm" type="button"><i class="bi bi-eraser"></i> Forget</button>
+            <button id="btnGenerate" class="btn btn-success btn-sm" type="button"><i class="bi bi-stars"></i> Generate</button>
+          </div>
+        </form>
+
+        <!-- Generator Controls -->
+        <div class="w-100 order-lg-1">
+          <div class="row g-3 mt-3">
+            <div class="col-6 col-md-2">
+              <label class="form-label m-0">Target level</label>
+              <input id="levelTarget" type="number" class="form-control form-control-sm" min="0" value="3">
+            </div>
+            <div class="col-6 col-md-2">
+              <label class="form-label m-0">Level variation ±</label>
+              <input id="levelVariation" type="number" class="form-control form-control-sm" min="0" value="1">
+            </div>
+            <div class="col-12 col-md-3">
+              <label class="form-label m-0">Wealth</label>
+              <select id="wealthTier" class="form-select form-select-sm">
+                <option>Poor</option>
+                <option selected>Modest</option>
+                <option>Comfortable</option>
+                <option>Wealthy</option>
+                <option>Opulent</option>
+              </select>
+            </div>
+            <div class="col-12 col-md-5">
+              <label class="form-label m-0">Style tags</label>
+              <div class="d-flex flex-wrap gap-2">
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="checkbox" value="dungeon" id="style1" checked>
+                  <label class="form-check-label" for="style1">Dungeon</label>
+                </div>
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="checkbox" value="forest raiders" id="style2">
+                  <label class="form-check-label" for="style2">Forest raiders</label>
+                </div>
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="checkbox" value="city gang" id="style3">
+                  <label class="form-check-label" for="style3">City gang</label>
+                </div>
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="checkbox" value="city guard" id="style4">
+                  <label class="form-check-label" for="style4">City guard</label>
+                </div>
+                <input id="styleFree" class="form-control form-control-sm flex-grow-1" placeholder="Add custom tags, comma-separated">
+              </div>
+            </div>
+
+            <div class="col-12 col-lg-7">
+              <label class="form-label m-0">Species</label>
+              <select id="speciesSelect" class="form-select form-select-sm" multiple size="4" aria-label="Species">
+                <!-- Common 5e species + extras -->
+                <option value="Mixed">Mixed</option>
+                <option>Human</option><option>Elf</option><option>Dwarf</option><option>Halfling</option>
+                <option>Gnome</option><option>Half-Elf</option><option>Half-Orc</option><option>Tiefling</option>
+                <option>Dragonborn</option><option>Goliath</option><option>Firbolg</option><option>Tabaxi</option>
+                <option>Kobold</option><option>Goblin</option><option>Orc</option><option>Lizardfolk</option>
+                <option>Aasimar</option><option>Triton</option><option>Genasi</option><option>Kenku</option>
+                <option>Bugbear</option><option>Yuan-ti</option><option>Tortle</option><option>Warforged</option>
+                <option>Shifter</option><option>Changeling</option><option>Leonin</option><option>Satyr</option>
+                <option>Hobgoblin</option><option>Vedalken</option><option>Minotaur</option><option>Centaur</option>
+                <option>Simic Hybrid</option>
+              </select>
+              <div class="form-hint">Hold <span class="kbd">Ctrl</span>/<span class="kbd">Cmd</span> to select multiples.</div>
+            </div>
+
+            <div class="col-12 col-lg-5">
+              <label class="form-label m-0">Party (optional, for tuning)</label>
+              <div class="row g-2">
+                <div class="col-4">
+                  <input id="pcCount" type="number" class="form-control form-control-sm" min="1" value="4" placeholder="PCs">
+                  <div class="form-hint">PCs</div>
+                </div>
+                <div class="col-4">
+                  <input id="avgLevel" type="number" class="form-control form-control-sm" min="1" value="3" placeholder="APL">
+                  <div class="form-hint">Average level</div>
+                </div>
+                <div class="col-4">
+                  <select id="difficulty" class="form-select form-select-sm">
+                    <option>Any</option><option>Easy</option><option selected>Medium</option><option>Hard</option><option>Deadly</option>
+                  </select>
+                  <div class="form-hint">Encounter target</div>
+                </div>
+              </div>
+            </div>
+          </div><!-- /row -->
+        </div><!-- /w-100 -->
+      </div><!-- /collapse -->
+    </div>
+  </nav>
+
+  <!-- ===== Main Content ===== -->
+  <div class="container-fluid mt-3">
+    <div class="row g-3">
+      <!-- Left column: Initiative & Players -->
+      <aside class="col-12 col-lg-4 col-xxl-3">
+        <div class="card border-secondary-subtle">
+          <div class="card-header d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-2">
+              <i class="bi bi-list-ol text-info"></i>
+              <strong>Initiative</strong>
+            </div>
+            <div class="d-flex gap-2">
+              <button id="btnRollAllInit" class="btn btn-outline-info btn-sm" type="button" title="Roll initiatives for all mobs (d20 + DEX mod)">
+                <i class="bi bi-dice-5"></i> Roll mobs
+              </button>
+              <button id="btnClearInits" class="btn btn-outline-secondary btn-sm" type="button" title="Clear all initiatives">
+                <i class="bi bi-eraser"></i>
+              </button>
+            </div>
+          </div>
+          <div class="card-body">
+            <!-- Players free text list -->
+            <h6 class="text-secondary">Players</h6>
+            <div id="playersList" class="vstack gap-2"></div>
+            <div class="mt-2 d-flex gap-2">
+              <input id="playerName" class="form-control form-control-sm" placeholder="Name (e.g., Aria)">
+              <input id="playerInit" class="form-control form-control-sm tight-input" placeholder="Init" inputmode="numeric">
+              <button id="btnAddPlayer" class="btn btn-outline-primary btn-sm" type="button"><i class="bi bi-plus-lg"></i></button>
+            </div>
+
+            <div class="list-divider"></div>
+            <h6 class="text-secondary">Order</h6>
+            <div id="initiativeOrder" class="small"></div>
+          </div>
+        </div>
+
+        <div class="card border-secondary-subtle mt-3">
+          <div class="card-header d-flex align-items-center gap-2">
+            <i class="bi bi-arrow-repeat text-warning"></i><strong>Export / Import</strong>
+          </div>
+          <div class="card-body">
+            <div class="d-grid gap-2">
+              <button id="btnExport" class="btn btn-outline-light btn-sm" type="button"><i class="bi bi-download"></i> Export JSON</button>
+              <button id="btnImport" class="btn btn-outline-light btn-sm" type="button"><i class="bi bi-upload"></i> Import JSON</button>
+              <button id="btnSaveAll" class="btn btn-outline-success btn-sm" type="button"><i class="bi bi-save"></i> Save all</button>
+              <button id="btnForgetAll" class="btn btn-outline-danger btn-sm" type="button"><i class="bi bi-trash"></i> Forget all</button>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Right column: Mobs -->
+      <main class="col-12 col-lg-8 col-xxl-9">
+        <div class="sticky-top-2 py-2">
+          <div class="d-flex gap-2 align-items-center">
+            <i class="bi bi-people text-success"></i>
+            <strong>Generated mobs</strong>
+            <span id="mobCount" class="badge text-bg-dark border border-secondary-subtle">0</span>
+            <div class="ms-auto d-flex gap-2 align-items-center">
+              <div class="form-check form-check-inline">
+                <input class="form-check-input filterAlive" type="checkbox" id="filterAlive" checked>
+                <label class="form-check-label" for="filterAlive">Alive</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input filterAlive" type="checkbox" id="filterDown" checked>
+                <label class="form-check-label" for="filterDown">Down</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input filterAlive" type="checkbox" id="filterDead" checked>
+                <label class="form-check-label" for="filterDead">Dead</label>
+              </div>
+              <div class="input-group input-group-sm" style="width:260px;">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input id="searchInput" class="form-control" placeholder="Search by name, type, tag">
+                <button id="btnClearSearch" class="btn btn-outline-secondary" type="button"><i class="bi bi-x-lg"></i></button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="mobsArea" class="mt-2"></div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Toast Overlay -->
+  <div id="toastOverlay" class="toast-overlay"></div>
+
+  <!-- Modals -->
+  <div class="modal fade" id="exportModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title"><i class="bi bi-download"></i> Export JSON</h5>
+          <button class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+        <div class="modal-body">
+          <textarea id="exportText" class="form-control monosmall" rows="12" readonly></textarea>
+        </div>
+        <div class="modal-footer">
+          <button id="btnCopyExport" class="btn btn-outline-light"><i class="bi bi-clipboard"></i> Copy</button>
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="importModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title"><i class="bi bi-upload"></i> Import JSON</h5>
+          <button class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+        <div class="modal-body">
+          <textarea id="importText" class="form-control monosmall" rows="12" placeholder="{...}"></textarea>
+        </div>
+        <div class="modal-footer">
+          <button id="btnDoImport" class="btn btn-success"><i class="bi bi-check2-circle"></i> Import</button>
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== Scripts (single-file, no bundlers) ====== -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // =========================
+    // Utility: Cookies
+    // =========================
+    function setCookie(name, value, days=365) {
+      const expires = new Date(Date.now() + days*864e5).toUTCString();
+      document.cookie = name + '=' + encodeURIComponent(value) + '; expires=' + expires + '; path=/; SameSite=Lax';
+    }
+    function getCookie(name) {
+      return document.cookie.split('; ').reduce((r, v) => {
+        const parts = v.split('=');
+        return parts[0] === name ? decodeURIComponent(parts[1]) : r
+      }, '');
+    }
+    function eraseCookie(name) {
+      document.cookie = name + '=; Max-Age=-99999999; path=/';
+    }
+
+    // =========================
+    // Utility: UUID + Mods + Dice
+    // =========================
+    function uuidv4() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random()*16|0, v = c==='x'?r:(r&0x3|0x8); return v.toString(16);
+      });
+    }
+    function modFromStat(stat) { return Math.floor((Number(stat || 10)-10)/2); }
+    function parseDice(spec) {
+      // Supports: "2d6+3", "d8-1", "1d6 + 1d4 + 3"
+      const parts = spec.split(/(?=[+-])/g).map(s => s.trim());
+      const tokens = [];
+      let sign = +1;
+      for (let p of parts) {
+        if (!p) continue;
+        if (p[0]==='+') { sign=+1; p=p.slice(1).trim(); }
+        else if (p[0]==='-') { sign=-1; p=p.slice(1).trim(); }
+        else sign = +1;
+        const m = p.match(/^(\d*)d(\d+)$/i);
+        if (m) {
+          tokens.push({k: sign*(m[1]?+m[1]:1), faces:+m[2], flat:0});
+        } else if (/^\d+$/.test(p)) {
+          tokens.push({k:0, faces:0, flat: sign*+p});
+        } else {
+          // unsupported token; ignore gracefully
+        }
+      }
+      return tokens;
+    }
+    function rollDice(spec) {
+      const tokens = Array.isArray(spec) ? spec : parseDice(spec);
+      let total = 0;
+      const breakdown = [];
+      for (const t of tokens) {
+        if (t.faces && t.k !== 0) {
+          const rolls = [];
+          const count = Math.abs(t.k);
+          for (let i=0;i<count;i++) {
+            const r = 1 + Math.floor(Math.random()*t.faces);
+            rolls.push(r);
+          }
+          const s = rolls.reduce((a,b)=>a+b,0) * Math.sign(t.k);
+          total += s;
+          breakdown.push(`${Math.sign(t.k)<0?'-':''}${count}d${t.faces}[${rolls.join(',')}]`);
+        }
+        if (t.flat) {
+          total += t.flat;
+          breakdown.push(`${t.flat>=0?'+':''}${t.flat}`);
+        }
+      }
+      return { total, breakdown: breakdown.join(' ') };
+    }
+    function rollD20(mod=0, {advantage=false, disadvantage=false}={}) {
+      const r1 = 1 + Math.floor(Math.random()*20);
+      const r2 = 1 + Math.floor(Math.random()*20);
+      let chosen = r1;
+      let tag = '';
+      if (advantage && !disadvantage) { chosen = Math.max(r1,r2); tag = ` (adv ${r1}/${r2})`; }
+      if (disadvantage && !advantage) { chosen = Math.min(r1,r2); tag = ` (dis ${r1}/${r2})`; }
+      return { total: chosen + mod, raw: chosen, mod, pair:[r1,r2], note: tag };
+    }
+
+    // =========================
+    // App State & Schema
+    // =========================
+    const SCHEMA_VERSION = 1;
+    let appState = {
+      schemaVersion: SCHEMA_VERSION,
+      party: {
+        pcCount: 4, averageLevel: 3, playersInitiative: []
+      },
+      encounter: {
+        seed: "", style: ["dungeon"], species: ["Human"], wealthTier: "Modest",
+        levelTarget: 3, levelVariation: 1, mix: "balanced", difficulty: "Medium"
+      },
+      mobs: []
+    };
+
+    // Cookie keys
+    const CK_API_KEY = 'openai_api_key';
+    const CK_APP_STATE = 'encounterState_v1';
+    const CK_MOB_INDEX = 'mobIndex_v1'; // list of IDs for individually saved mobs (optional per-mob persistence)
+
+    // =========================
+    // DOM Helpers
+    // =========================
+    const $ = sel => document.querySelector(sel);
+    const $$ = sel => Array.from(document.querySelectorAll(sel));
+    function el(tag, attrs={}, ...children) {
+      const node = document.createElement(tag);
+      for (const [k,v] of Object.entries(attrs||{})) {
+        if (k === 'class') node.className = v;
+        else if (k === 'dataset') Object.assign(node.dataset, v);
+        else if (k.startsWith('on') && typeof v === 'function') node.addEventListener(k.slice(2), v);
+        else if (v !== null && v !== undefined) node.setAttribute(k, v);
+      }
+      for (const c of children) node.append(c);
+      return node;
+    }
+
+    // =========================
+    // Toasts
+    // =========================
+    function showActionToast({title="Action", body="Result", durationMs=60000}) {
+      const id = 't_' + uuidv4();
+      const toast = el('div', {class:'toast text-bg-dark border border-secondary-subtle', role:'alert', id});
+      const header = el('div', {class:'toast-header bg-dark text-white border-0'},
+        el('i', {class:'bi bi-bullseye me-2 text-success'}),
+        el('strong', {class:'me-auto'}, title),
+        el('small', {}, 'now'),
+        el('button', {class:'btn-close btn-close-white ms-2', 'data-bs-dismiss':'toast', 'aria-label':'Close'})
+      );
+      const bodyEl = el('div', {class:'toast-body'}, body);
+      const prog = el('div', {class:'progress mt-2'},
+        el('div', {class:'progress-bar', role:'progressbar', style:`width:100%; transition: width ${durationMs}ms linear;`})
+      );
+      toast.append(header, bodyEl, prog);
+      $('#toastOverlay').prepend(toast);
+      const t = new bootstrap.Toast(toast, {autohide:true, delay:durationMs});
+      t.show();
+      // kick progress
+      requestAnimationFrame(() => {
+        const bar = toast.querySelector('.progress-bar');
+        if (bar) bar.style.width = '0%';
+      });
+      // cleanup after hidden
+      toast.addEventListener('hidden.bs.toast', () => toast.remove());
+    }
+
+    // =========================
+    // Persistence
+    // =========================
+    function saveStateToCookie() {
+      try {
+        const slim = JSON.stringify(appState);
+        setCookie(CK_APP_STATE, slim);
+      } catch (e) {
+        alert('Could not save state to cookies. Consider exporting JSON.');
+      }
+    }
+    function loadStateFromCookie() {
+      try {
+        const s = getCookie(CK_APP_STATE);
+        if (s) {
+          const parsed = JSON.parse(s);
+          if (parsed.schemaVersion === SCHEMA_VERSION) {
+            appState = parsed;
+          } else {
+            // basic forward migration hook (noop for now)
+            appState = Object.assign({schemaVersion: SCHEMA_VERSION}, parsed);
+          }
+        }
+      } catch (e) {
+        console.warn('Load cookie failed', e);
+      }
+    }
+
+    // =========================
+    // Rendering
+    // =========================
+    function renderPlayers() {
+      const wrap = $('#playersList');
+      wrap.innerHTML = '';
+      appState.party.playersInitiative.forEach((p, idx) => {
+        wrap.append(
+          el('div', {class:'d-flex gap-2 align-items-center'},
+            el('input', {class:'form-control form-control-sm', value:p.name, oninput: (e)=>{p.name=e.target.value; saveStateToCookie(); renderInitiativeOrder();}}),
+            el('input', {class:'form-control form-control-sm tight-input', value:p.init??'', inputmode:'numeric',
+              oninput: (e)=>{p.init=Number(e.target.value)||''; saveStateToCookie(); renderInitiativeOrder();}}),
+            el('button', {class:'btn btn-outline-danger btn-sm', onclick:()=>{appState.party.playersInitiative.splice(idx,1); saveStateToCookie(); renderPlayers(); renderInitiativeOrder();}}, el('i',{class:'bi bi-x-lg'}))
+          )
+        );
+      });
+    }
+
+    function statusOfMob(m) {
+      if (m.hp.current <= 0 && (m.deathSaves?.fail ?? 0) >= 3) return 'dead';
+      if (m.hp.current <= 0) return 'down';
+      return 'alive';
+    }
+
+    function renderMobs() {
+      const area = $('#mobsArea');
+      area.innerHTML = '';
+
+      const filters = {
+        alive: $('#filterAlive').checked,
+        down: $('#filterDown').checked,
+        dead: $('#filterDead').checked,
+        search: ($('#searchInput').value || '').trim().toLowerCase()
+      };
+
+      const mobsSorted = [...appState.mobs].sort((a,b) => a.name.localeCompare(b.name));
+      const visible = mobsSorted.filter(m => {
+        const s = statusOfMob(m);
+        if (s === 'alive' && !filters.alive) return false;
+        if (s === 'down' && !filters.down) return false;
+        if (s === 'dead' && !filters.dead) return false;
+        if (filters.search) {
+          const blob = [m.name, ...(m.traits?.map(t=>t.name)||[]), ...(appState.encounter?.style||[])].join(' ').toLowerCase();
+          if (!blob.includes(filters.search)) return false;
+        }
+        return true;
+      });
+
+      $('#mobCount').textContent = String(appState.mobs.length);
+
+      visible.forEach((m) => area.append(renderMobCard(m)));
+    }
+
+    function renderStatBlock(stats) {
+      const row = el('div', {class:'d-flex flex-wrap gap-2'});
+      for (const key of ['str','dex','con','int','wis','cha']) {
+        const v = Number(stats?.[key] ?? 10);
+        const mod = modFromStat(v);
+        row.append(
+          el('div', {class:'stat'},
+            el('div', {class:'text-secondary text-uppercase', style:'font-size:.7rem; letter-spacing:.05em;'}, key),
+            el('div', {class:'v'}, String(v)),
+            el('div', {class:'m'}, (mod>=0?'+':'') + mod)
+          )
+        );
+      }
+      return row;
+    }
+
+    function renderCoins(coins){
+      const c = coins || {};
+      return el('div', {class:'d-flex flex-wrap gap-2 monosmall'},
+        el('span', {class:'pill'}, `cp ${c.cp||0}`),
+        el('span', {class:'pill'}, `sp ${c.sp||0}`),
+        el('span', {class:'pill'}, `gp ${c.gp||0}`),
+        el('span', {class:'pill'}, `pp ${c.pp||0}`)
+      );
+    }
+
+    function renderMobCard(m) {
+      const card = el('div', {class:'card mob-card mb-3', id:`mob_${m.id}`});
+      const header = el('div', {class:'card-header d-flex align-items-center justify-content-between gap-2'},
+        el('div', {class:'d-flex align-items-center gap-2'},
+          el('h3', {class: 'm-0 ' + (statusOfMob(m)==='dead'?'strike-dead':'' )}, m.name || 'Unnamed'),
+          el('span', {class:'pill monosmall'}, `Lvl ${m.level ?? '?'} • AC ${m.ac ?? '?'}`)
+        ),
+        el('div', {class:'d-flex gap-2'},
+          el('button', {class:'btn btn-outline-success btn-sm', title:'Save to cookie', onclick:()=>saveMobIndividually(m)}, el('i',{class:'bi bi-bookmark-check'})),
+          el('button', {class:'btn btn-outline-danger btn-sm', title:'Delete from list', onclick:()=>deleteMob(m.id)}, el('i',{class:'bi bi-trash'}))
+        )
+      );
+
+      const body = el('div', {class:'card-body vstack gap-3'});
+
+      // Row: HP / Init / AC / Movement
+      const hpRow = el('div', {class:'row g-3 align-items-end'},
+        el('div', {class:'col-6 col-md-4'},
+          el('label', {class:'form-label m-0'}, 'HP (cur / max / temp)'),
+          el('div', {class:'d-flex align-items-center gap-2'},
+            el('input', {class:'form-control form-control-sm hp-input', value:m.hp?.current??0, inputmode:'numeric',
+              oninput:(e)=>{m.hp.current = Number(e.target.value)||0; saveStateToCookie(); renderInitiativeOrder(); renderMobs();}}),
+            el('span', {}, '/'),
+            el('input', {class:'form-control form-control-sm hp-input', value:m.hp?.max??0, inputmode:'numeric',
+              oninput:(e)=>{m.hp.max = Number(e.target.value)||0; saveStateToCookie(); renderMobs();}}),
+            el('span', {}, '+'),
+            el('input', {class:'form-control form-control-sm tight-input', value:m.hp?.temp??0, inputmode:'numeric',
+              oninput:(e)=>{m.hp.temp = Number(e.target.value)||0; saveStateToCookie(); renderMobs();}})
+          ),
+          el('div', {class:'mt-2 d-flex gap-2'},
+            el('input', {class:'form-control form-control-sm tight-input', placeholder:'Amount', inputmode:'numeric', id:`dmg_${m.id}`}),
+            el('button', {class:'btn btn-outline-danger btn-sm', onclick:()=>applyDamageHeal(m.id, 'damage')}, 'Damage'),
+            el('button', {class:'btn btn-outline-success btn-sm', onclick:()=>applyDamageHeal(m.id, 'heal')}, 'Heal')
+          ),
+          el('div', {class:'form-hint'}, 'At 0 HP: use Death Saves below, or mark Dead.')
+        ),
+        el('div', {class:'col-6 col-md-2'},
+          el('label', {class:'form-label m-0'}, 'Initiative'),
+          el('input', {class:'form-control form-control-sm', value:m.initiative??'', inputmode:'numeric',
+            oninput:(e)=>{m.initiative=Number(e.target.value)||''; saveStateToCookie(); renderInitiativeOrder();}})
+        ),
+        el('div', {class:'col-6 col-md-2'},
+          el('label', {class:'form-label m-0'}, 'AC'),
+          el('input', {class:'form-control form-control-sm', value:m.ac??'', inputmode:'numeric',
+            oninput:(e)=>{m.ac=Number(e.target.value)||''; saveStateToCookie();}})
+        ),
+        el('div', {class:'col-6 col-md-4'},
+          el('label', {class:'form-label m-0'}, 'Movement'),
+          el('input', {class:'form-control form-control-sm', value:(m.movement?.walk ?? 30), oninput:(e)=>{m.movement = m.movement||{}; m.movement.walk = e.target.value; saveStateToCookie();}})
+        )
+      );
+
+      // Row: Stats
+      const statsRow = el('div', {class:'vstack gap-2'},
+        el('div', {class:'d-flex align-items-center gap-2'},
+          el('i', {class:'bi bi-activity text-info'}), el('strong', {}, 'Ability Scores')
+        ),
+        renderStatBlock(m.stats || {})
+      );
+
+      // Row: Traits / Senses / Languages
+      const traitsRow = el('div', {class:'row g-3'},
+        el('div', {class:'col-12 col-md-6'},
+          el('div', {class:'d-flex align-items-center gap-2 mb-1'},
+            el('i', {class:'bi bi-stars text-warning'}), el('strong', {}, 'Traits')
+          ),
+          el('ul', {class:'small mb-0'}, ...(m.traits||[]).map(t => el('li', {}, el('strong',{}, t.name+': '), t.text||'')))
+        ),
+        el('div', {class:'col-6 col-md-3'},
+          el('div', {class:'d-flex align-items-center gap-2 mb-1'}, el('i',{class:'bi bi-ear text-secondary'}), el('strong',{},'Senses')),
+          el('div', {class:'small'}, m.senses || '—')
+        ),
+        el('div', {class:'col-6 col-md-3'},
+          el('div', {class:'d-flex align-items-center gap-2 mb-1'}, el('i',{class:'bi bi-translate text-secondary'}), el('strong',{},'Languages')),
+          el('div', {class:'small'}, (m.languages||['—']).join(', '))
+        )
+      );
+
+      // Row: Actions & Spells
+      const actionRow = el('div', {class:'row g-3'},
+        el('div', {class:'col-12 col-lg-6'},
+          el('div', {class:'d-flex align-items-center gap-2 mb-1'},
+            el('i', {class:'bi bi-lightning-charge text-danger'}), el('strong', {}, 'Actions')),
+          renderActionList(m, m.actions || [])
+        ),
+        el('div', {class:'col-12 col-lg-6'},
+          el('div', {class:'d-flex align-items-center gap-2 mb-1'},
+            el('i', {class:'bi bi-magic text-primary'}), el('strong', {}, 'Spells')),
+          renderActionList(m, m.spells || [])
+        )
+      );
+
+      // Row: Inventory / Conditions / Death saves / Concentration
+      const bottomRow = el('div', {class:'row g-3 align-items-start'},
+        el('div', {class:'col-12 col-md-6'},
+          el('div', {class:'d-flex align-items-center gap-2 mb-1'}, el('i',{class:'bi bi-bag text-success'}), el('strong',{},'Inventory & Coins')),
+          el('div', {}, renderCoins(m.inventory?.coins)),
+          el('ul', {class:'inventory-list mt-2 small'}, ...((m.inventory?.items)||[]).map(it=>el('li', {}, '• ', it)))
+        ),
+        el('div', {class:'col-12 col-md-6 vstack gap-2'},
+          el('div', {class:'d-flex align-items-center gap-2'},
+            el('i',{class:'bi bi-exclamation-octagon text-warning'}), el('strong',{},'Conditions')),
+          renderConditionsEditor(m),
+          el('div', {class:'d-flex align-items-center gap-2 mt-2'},
+            el('i',{class:'bi bi-heart-pulse text-danger'}), el('strong',{},'Death Saves'),
+            renderDeathSaves(m),
+            el('button', {class:'btn btn-outline-secondary btn-sm ms-auto', onclick:()=>rollDeathSave(m)}, 'Roll Death Save')
+          ),
+          el('div', {class:'d-flex align-items-center gap-2 mt-2'},
+            el('i',{class:'bi bi-bullseye text-info'}), el('strong',{},'Concentration'),
+            el('div', {class:'form-check form-switch ms-2'},
+              el('input', {class:'form-check-input', type:'checkbox', checked: !!m.concentration, onchange:(e)=>{m.concentration = e.target.checked ? (m.concentration||{spell:'', dc:10}) : null; saveStateToCookie(); renderMobs();}})
+            ),
+            m.concentration ? el('input', {class:'form-control form-control-sm', placeholder:'Spell / DC', value: `${m.concentration.spell||''} / DC ${m.concentration.dc||10}`,
+              oninput:(e)=>{ const [spellPart, dcPart] = e.target.value.split('/'); m.concentration.spell = (spellPart||'').trim(); const dcm = dcPart?.match(/\d+/); m.concentration.dc = dcm ? Number(dcm[0]) : 10; saveStateToCookie(); }}) : el('span', {class:'text-secondary small'}, 'Off')
+          ),
+          el('div', {class:'mt-2'},
+            el('label', {class:'form-label m-0'}, 'Notes'),
+            el('textarea', {class:'form-control form-control-sm', rows:'2', value:m.notes||'', oninput:(e)=>{m.notes=e.target.value; saveStateToCookie();}})
+          )
+        )
+      );
+
+      body.append(hpRow, statsRow, traitsRow, actionRow, bottomRow);
+      card.append(header, body);
+      return card;
+    }
+
+    function renderActionList(mob, list) {
+      if (!list?.length) return el('div', {class:'text-secondary small'}, '—');
+      const wrap = el('div', {class:'vstack gap-2'});
+      list.forEach((a, idx) => {
+        const btn = el('button', {class:'btn btn-outline-light btn-sm'}, a.name || `Action ${idx+1}`);
+        btn.addEventListener('click', ()=>performAction(mob, a));
+        const meta = [];
+        if (a.type) meta.push(a.type);
+        if (a.range) meta.push(a.range);
+        if (a.attackBonus !== undefined) meta.push(`+${a.attackBonus} to hit`);
+        if (a.damage?.length) meta.push(a.damage.map(d=>`${d.dice}${d.type?(' '+d.type):''}`).join(' + '));
+        const desc = el('div', {class:'small text-secondary'}, meta.join(' • ') || '—');
+        wrap.append(el('div', {class:'d-grid gap-1'}, btn, desc));
+        if (a.notes) wrap.append(el('div', {class:'small'}, a.notes));
+      });
+      return wrap;
+    }
+
+    function renderConditionsEditor(m) {
+      const ALL = ['blinded','charmed','deafened','frightened','grappled','incapacitated','invisible','paralyzed','petrified','poisoned','prone','restrained','stunned','unconscious'];
+      const row = el('div', {class:'d-flex flex-wrap gap-2'});
+      const conds = new Set(m.conditions||[]);
+      ALL.forEach(c => {
+        const chip = el('span', {class:'chip pointer ' + (conds.has(c)?'border-success':'')}, el('i',{class:'bi bi-dot'}), c);
+        chip.addEventListener('click', ()=>{
+          if (conds.has(c)) conds.delete(c); else conds.add(c);
+          m.conditions = Array.from(conds);
+          saveStateToCookie(); renderMobs();
+        });
+        row.append(chip);
+      });
+      return row;
+    }
+
+    function renderDeathSaves(m) {
+      m.deathSaves = m.deathSaves || {success:0, fail:0};
+      const wrap = el('div', {class:'d-flex align-items-center gap-2'});
+      const s = m.deathSaves.success || 0, f = m.deathSaves.fail || 0;
+      const pill = (filled, type) => el('span', {class:'chip ' + (filled? (type==='s'?'border-success':'border-danger') : '')}, type==='s'?'S':'F');
+      wrap.append(pill(s>=1,'s'), pill(s>=2,'s'), pill(s>=3,'s'), el('span',{},' '), pill(f>=1,'f'), pill(f>=2,'f'), pill(f>=3,'f'));
+      return wrap;
+    }
+
+    // =========================
+    // Actions & Rolls
+    // =========================
+    function performAction(m, a) {
+      // Attack roll (if attackBonus present), then damage
+      let html = `<div class="monosmall">`;
+      if (a.attackBonus !== undefined) {
+        const mod = Number(a.attackBonus)||0;
+        const r = rollD20(mod);
+        html += `<div><strong>Attack:</strong> d20${mod>=0?'+':''}${mod} → <b>${r.total}</b> (raw ${r.raw}${r.note})</div>`;
+        html += `<div class="small text-secondary">Compare against target AC.</div>`;
+      }
+      if (a.save?.dc) {
+        html += `<div><strong>Save:</strong> ${a.save.ability || '—'} DC ${a.save.dc}</div>`;
+      }
+      if (a.damage?.length) {
+        const parts = [];
+        for (const d of a.damage) {
+          const r = rollDice(d.dice);
+          parts.push(`${d.dice}${d.type?(' '+d.type):''} → <b>${r.total}</b> <span class="text-secondary">[${r.breakdown}]</span>`);
+        }
+        html += `<div><strong>Damage:</strong> ${parts.join(' + ')}</div>`;
+      }
+      if (a.effect) html += `<div class="mt-1"><strong>Effect:</strong> ${a.effect}</div>`;
+      if (a.notes)  html += `<div class="text-secondary small">${a.notes}</div>`;
+      html += `</div>`;
+      showActionToast({title:`${m.name}: ${a.name}`, body:html, durationMs:60000});
+    }
+
+    function applyDamageHeal(id, kind) {
+      const mob = appState.mobs.find(x=>x.id===id);
+      if (!mob) return;
+      const input = document.getElementById(`dmg_${id}`);
+      const amt = Number(input.value || 0);
+      if (!amt) return;
+      if (kind === 'damage') {
+        // temp HP first
+        let remaining = amt;
+        const temp = Number(mob.hp.temp||0);
+        if (temp > 0) {
+          const use = Math.min(temp, remaining);
+          mob.hp.temp = temp - use;
+          remaining -= use;
+        }
+        mob.hp.current = Math.max(0, Number(mob.hp.current||0) - remaining);
+      } else {
+        mob.hp.current = Math.min(Number(mob.hp.max||0), Number(mob.hp.current||0) + amt);
+      }
+      input.value = '';
+      // If dropped to 0, prompt to start death saves
+      if (mob.hp.current <= 0 && !mob.deathSaves) mob.deathSaves = {success:0, fail:0};
+      saveStateToCookie(); renderMobs(); renderInitiativeOrder();
+    }
+
+    function rollDeathSave(m) {
+      // d20; 10+ = success; 1 = 2 fails; 20 = 1 HP
+      const r = 1 + Math.floor(Math.random()*20);
+      if (r === 1) m.deathSaves.fail = Math.min(3, (m.deathSaves.fail||0)+2);
+      else if (r === 20) { m.hp.current = 1; m.deathSaves = {success:0, fail:0}; }
+      else if (r >= 10) m.deathSaves.success = Math.min(3, (m.deathSaves.success||0)+1);
+      else m.deathSaves.fail = Math.min(3, (m.deathSaves.fail||0)+1);
+      // Stabilize on 3 successes; dead on 3 fails
+      if ((m.deathSaves.success||0) >= 3) { m.hp.current = 0; } // stabilized at 0
+      saveStateToCookie(); renderMobs();
+      showActionToast({title:`${m.name}: Death Save`, body:`<div class="monosmall">Roll = <b>${r}</b><br>S:${m.deathSaves.success||0} F:${m.deathSaves.fail||0}</div>`, durationMs:15000});
+    }
+
+    // =========================
+    // Initiative order
+    // =========================
+    function renderInitiativeOrder() {
+      const view = $('#initiativeOrder');
+      const entries = [];
+      // players
+      for (const p of appState.party.playersInitiative) {
+        if (p.name && p.init !== '' && p.init !== undefined) entries.push({name:`${p.name} (PC)`, init: Number(p.init)||0});
+      }
+      // mobs
+      for (const m of appState.mobs) {
+        if (m.initiative !== '' && m.initiative !== undefined) entries.push({name:m.name, init: Number(m.initiative)||0});
+      }
+      entries.sort((a,b)=> b.init - a.init);
+      if (!entries.length) { view.innerHTML = '<span class="text-secondary">No initiatives yet.</span>'; return; }
+      const tbl = el('table', {class:'table table-dark table-sm table-smaller align-middle mb-0'});
+      tbl.append(
+        el('thead', {}, el('tr', {},
+          el('th', {}, 'Init'), el('th', {}, 'Name')
+        )),
+        el('tbody', {}, ...entries.map(e => el('tr', {}, el('td', {}, e.init), el('td', {}, e.name))))
+      );
+      view.innerHTML=''; view.append(tbl);
+    }
+
+    function rollAllMobInitiatives() {
+      for (const m of appState.mobs) {
+        const dex = Number(m.stats?.dex ?? 10);
+        m.initiative = rollD20(modFromStat(dex)).total;
+      }
+      saveStateToCookie(); renderMobs(); renderInitiativeOrder();
+    }
+
+    // =========================
+    // Save/Delete per mob
+    // =========================
+    function getMobIndex() {
+      try { return JSON.parse(getCookie(CK_MOB_INDEX) || '[]'); } catch { return []; }
+    }
+    function setMobIndex(arr) { setCookie(CK_MOB_INDEX, JSON.stringify(arr)); }
+    function saveMobIndividually(m) {
+      const idx = getMobIndex();
+      if (!idx.includes(m.id)) { idx.push(m.id); setMobIndex(idx); }
+      setCookie('mob_' + m.id, JSON.stringify(m));
+      showActionToast({title:'Saved', body:`<div class="monosmall">${m.name} saved to cookies.</div>`, durationMs:5000});
+    }
+    function deleteMob(id) {
+      const i = appState.mobs.findIndex(x=>x.id===id);
+      if (i>=0) appState.mobs.splice(i,1);
+      saveStateToCookie(); renderMobs(); renderInitiativeOrder();
+    }
+
+    // =========================
+    // Export / Import
+    // =========================
+    function exportJSON() {
+      const obj = JSON.parse(JSON.stringify(appState));
+      $('#exportText').value = JSON.stringify(obj, null, 2);
+      new bootstrap.Modal('#exportModal').show();
+    }
+    function importJSONFromText() {
+      const txt = $('#importText').value;
+      try {
+        const obj = JSON.parse(txt);
+        if (!obj || !obj.mobs) throw new Error('Invalid structure');
+        appState = obj;
+        saveStateToCookie();
+        renderPlayers(); renderMobs(); renderInitiativeOrder();
+        bootstrap.Modal.getInstance('#importModal')?.hide();
+      } catch (e) {
+        alert('Invalid JSON.');
+      }
+    }
+
+    // =========================
+    // OpenAI: Generate Encounter
+    // =========================
+    async function generateEncounter() {
+      const apiKey = $('#apiKey').value.trim();
+      if (!apiKey) { alert('Enter your OpenAI API key first.'); return; }
+
+      // Gather inputs
+      const levelTarget = Number($('#levelTarget').value || 1);
+      const levelVariation = Number($('#levelVariation').value || 0);
+      const wealthTier = $('#wealthTier').value;
+
+      const style = $$('#topbar input.form-check-input:checked').map(c=>c.value);
+      const freeTags = ($('#styleFree').value||'').split(',').map(s=>s.trim()).filter(Boolean);
+      const styleAll = [...new Set([...style, ...freeTags])];
+
+      const speciesSel = Array.from($('#speciesSelect').selectedOptions).map(o=>o.value);
+      const party = {
+        pcCount: Number($('#pcCount').value || 4),
+        averageLevel: Number($('#avgLevel').value || 3)
+      };
+      const difficulty = $('#difficulty').value;
+
+      appState.encounter = {
+        seed: freeTags.join(', '),
+        style: styleAll.length ? styleAll : ['dungeon'],
+        species: speciesSel.length ? speciesSel : ['Mixed'],
+        wealthTier,
+        levelTarget, levelVariation, mix: 'balanced', difficulty
+      };
+      appState.party.pcCount = party.pcCount;
+      appState.party.averageLevel = party.averageLevel;
+
+      // Build JSON schema for structured outputs
+      const schema = {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          schemaVersion: { type: "integer" },
+          party: {
+            type:"object", additionalProperties:false,
+            properties: {
+              pcCount:{type:"integer"}, averageLevel:{type:"integer"},
+              playersInitiative:{ type:"array", items:{type:"object", additionalProperties:false, properties:{name:{type:"string"}, init:{type:["integer","string","null"]}}}}
+            }, required:["pcCount","averageLevel"]
+          },
+          encounter: {
+            type:"object", additionalProperties:false,
+            properties: {
+              seed:{type:"string"}, style:{type:"array", items:{type:"string"}}, species:{type:"array", items:{type:"string"}},
+              wealthTier:{type:"string"}, levelTarget:{type:"integer"}, levelVariation:{type:"integer"},
+              mix:{type:"string"}, difficulty:{type:"string"}
+            },
+            required:["style","species","wealthTier","levelTarget","levelVariation"]
+          },
+          mobs: {
+            type:"array",
+            items:{
+              type:"object", additionalProperties:false,
+              properties:{
+                id:{type:"string"},
+                name:{type:"string"},
+                level:{type:"integer"},
+                ac:{type:"integer"},
+                hp:{type:"object", additionalProperties:false, properties:{current:{type:"integer"}, max:{type:"integer"}, temp:{type:"integer"}}, required:["current","max"]},
+                movement:{type:"object"},
+                initiative:{type:["integer","string","null"]},
+                stats:{type:"object", additionalProperties:false, properties:{str:{type:"integer"}, dex:{type:"integer"}, con:{type:"integer"}, int:{type:"integer"}, wis:{type:"integer"}, cha:{type:"integer"}}},
+                saves:{type:"object"},
+                skills:{type:"object"},
+                senses:{type:"string"},
+                languages:{type:"array", items:{type:"string"}},
+                resistances:{type:"array", items:{type:"string"}},
+                immunities:{type:"array", items:{type:"string"}},
+                vulnerabilities:{type:"array", items:{type:"string"}},
+                traits:{type:"array", items:{type:"object", additionalProperties:false, properties:{name:{type:"string"}, text:{type:"string"}}, required:["name"]}},
+                actions:{type:"array", items:{type:"object", additionalProperties:false,
+                  properties:{
+                    name:{type:"string"}, type:{type:"string"}, range:{type:"string"},
+                    attackBonus:{type:["integer","null"]},
+                    damage:{type:"array", items:{type:"object", additionalProperties:false, properties:{dice:{type:"string"}, type:{type:"string"}}}},
+                    save:{type:"object", additionalProperties:false, properties:{dc:{type:"integer"}, ability:{type:"string"}}},
+                    effect:{type:"string"}, notes:{type:"string"}
+                  }, required:["name"]}},
+                spells:{type:"array", items:{type:"object"}},
+                inventory:{type:"object", additionalProperties:true},
+                conditions:{type:"array", items:{type:"string"}},
+                concentration:{type:["null","object"]},
+                deathSaves:{type:"object", additionalProperties:false, properties:{success:{type:"integer"}, fail:{type:"integer"}}},
+                notes:{type:"string"}
+              },
+              required:["id","name","ac","hp","stats","actions","inventory"]
+            }
+          }
+        },
+        required:["schemaVersion","party","encounter","mobs"]
+      };
+
+      const systemPrompt =
+`You generate compact, ready-to-run D&D 5e-style enemy mobs for a Dungeon Master.
+Constraints:
+- Output MUST strictly follow the provided JSON Schema.
+- Populate fields realistically and consistently with level target and style.
+- Provide 3–6 mobs unless the inputs suggest otherwise.
+- Provide a mix of names; keep descriptions concise, focused on play utility.
+- Actions should include to-hit bonuses and damage dice where applicable.
+- Inventory should reflect the wealth tier (coins + 1–3 items each).`;
+
+      const userPrompt =
+`Inputs:
+- Level target: ${levelTarget} (±${levelVariation})
+- Species: ${appState.encounter.species.join(', ')}
+- Style: ${appState.encounter.style.join(', ')}
+- Wealth: ${wealthTier}
+- Party: ${party.pcCount} PCs at avg level ${party.averageLevel}, difficulty ${difficulty}
+
+Return: a full JSON object that passes the schema and is immediately usable by the app. Use unique IDs (UUID style).`;
+
+      try {
+        // Responses API
+        const resp = await fetch('https://api.openai.com/v1/responses', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            input: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt }
+            ],
+            max_output_tokens: 4000,
+            response_format: {
+              type: "json_schema",
+              json_schema: { name: "Encounter", schema, strict: true }
+            }
+          })
+        });
+
+        if (!resp.ok) {
+          const txt = await resp.text();
+          throw new Error(txt);
+        }
+        const data = await resp.json();
+
+        // Try to extract JSON from Responses API
+        let parsed = null;
+        try {
+          const out = data.output || data.response || data; // guard
+          // common: output[0].content[0]
+          const first = out?.[0]?.content?.[0] || out?.content?.[0] || null;
+          if (first && first.type === 'json') parsed = first.json;
+          else if (first && first.type === 'output_text') parsed = JSON.parse(first.text);
+          else if (out?.content) {
+            const cj = out.content.find(c=>c.type==='json');
+            if (cj) parsed = cj.json;
+            else {
+              const ct = out.content.find(c=>c.type==='output_text');
+              if (ct) parsed = JSON.parse(ct.text);
+            }
+          }
+          if (!parsed && data && typeof data === 'object') {
+            // last resort: stringify & regex curly JSON
+            const raw = JSON.stringify(data);
+            const match = raw.match(/{(?:[^{}]|{[^{}]*})*}/);
+            if (match) parsed = JSON.parse(match[0]);
+          }
+        } catch (e) {
+          console.warn('Parse structured output failed', e, data);
+          throw new Error('Could not parse structured output. See console.');
+        }
+
+        if (!parsed?.mobs) throw new Error('No mobs in response.');
+
+        // Merge into state (replace current encounter)
+        appState.schemaVersion = SCHEMA_VERSION;
+        appState.party = parsed.party || appState.party;
+        appState.encounter = parsed.encounter || appState.encounter;
+        const mobs = (parsed.mobs || []).map(normalizeMob);
+        appState.mobs = mobs;
+
+        saveStateToCookie();
+        renderPlayers(); renderMobs(); renderInitiativeOrder();
+        showActionToast({title:'Encounter ready', body:`<div class="monosmall">${mobs.length} mobs generated.</div>`, durationMs:8000});
+      } catch (err) {
+        console.error(err);
+        showActionToast({title:'Generation failed', body:`<div class="monosmall text-danger">${(err && err.message) || err}</div>`, durationMs:15000});
+      }
+    }
+
+    function normalizeMob(m) {
+      // Ensure required minimal shape
+      return {
+        id: m.id || uuidv4(),
+        name: m.name || 'Unnamed',
+        level: Number(m.level ?? appState.encounter.levelTarget ?? 3),
+        ac: Number(m.ac ?? 12),
+        hp: Object.assign({current: 1, max: 1, temp: 0}, m.hp || {}),
+        movement: m.movement || {walk: 30},
+        initiative: m.initiative ?? '',
+        stats: Object.assign({str:10,dex:10,con:10,int:10,wis:10,cha:10}, m.stats || {}),
+        saves: m.saves || {},
+        skills: m.skills || {},
+        senses: m.senses || '—',
+        languages: m.languages || ['Common'],
+        resistances: m.resistances || [],
+        immunities: m.immunities || [],
+        vulnerabilities: m.vulnerabilities || [],
+        traits: m.traits || [],
+        actions: Array.isArray(m.actions) && m.actions.length ? m.actions : [{
+          name:'Weapon Attack', type:'weapon', range:'5 ft', attackBonus: modFromStat((m.stats||{}).str||10) + 2,
+          damage:[{dice:'1d6+2', type:'slashing'}], notes:'Basic attack'
+        }],
+        spells: m.spells || [],
+        inventory: m.inventory || { coins: {cp:0,sp:0,gp:0,pp:0}, items:[] },
+        conditions: m.conditions || [],
+        concentration: m.concentration || null,
+        deathSaves: m.deathSaves || {success:0, fail:0},
+        notes: m.notes || ''
+      };
+    }
+
+    // =========================
+    // Wire up UI
+    // =========================
+    document.addEventListener('DOMContentLoaded', () => {
+      // Load from cookies
+      loadStateFromCookie();
+      // Load API key
+      const k = getCookie(CK_API_KEY);
+      if (k) $('#apiKey').value = k;
+
+      // Hydrate inputs from state
+      $('#levelTarget').value = appState.encounter.levelTarget ?? 3;
+      $('#levelVariation').value = appState.encounter.levelVariation ?? 1;
+      $('#wealthTier').value = appState.encounter.wealthTier ?? 'Modest';
+      $('#pcCount').value = appState.party.pcCount ?? 4;
+      $('#avgLevel').value = appState.party.averageLevel ?? 3;
+      $('#difficulty').value = appState.encounter.difficulty ?? 'Medium';
+
+      // Styles
+      $$('#topbar input.form-check-input').forEach(c => c.checked = appState.encounter.style?.includes(c.value));
+      $('#styleFree').value = appState.encounter.seed ?? '';
+
+      // Species
+      const setSpecies = new Set(appState.encounter.species || ['Human']);
+      Array.from($('#speciesSelect').options).forEach(o => { if (setSpecies.has(o.value)) o.selected = true; });
+
+      renderPlayers();
+      renderMobs();
+      renderInitiativeOrder();
+
+      // Events
+      $('#btnSaveKey').addEventListener('click', ()=>{ setCookie(CK_API_KEY, $('#apiKey').value.trim()); showActionToast({title:'API key', body:'<div class="monosmall">Saved to cookie.</div>', durationMs:4000}); });
+      $('#btnForgetKey').addEventListener('click', ()=>{ eraseCookie(CK_API_KEY); $('#apiKey').value=''; showActionToast({title:'API key', body:'<div class="monosmall">Forgotten.</div>', durationMs:4000}); });
+
+      $('#btnGenerate').addEventListener('click', generateEncounter);
+
+      $('#btnAddPlayer').addEventListener('click', ()=>{
+        const name = $('#playerName').value.trim();
+        const init = Number($('#playerInit').value || 0);
+        if (!name) return;
+        appState.party.playersInitiative.push({name, init});
+        $('#playerName').value=''; $('#playerInit').value='';
+        saveStateToCookie(); renderPlayers(); renderInitiativeOrder();
+      });
+
+      $('#btnRollAllInit').addEventListener('click', rollAllMobInitiatives);
+      $('#btnClearInits').addEventListener('click', ()=>{
+        appState.mobs.forEach(m=>m.initiative='');
+        appState.party.playersInitiative.forEach(p=>p.init='');
+        saveStateToCookie(); renderInitiativeOrder();
+      });
+
+      $('#btnExport').addEventListener('click', exportJSON);
+      $('#btnImport').addEventListener('click', ()=> new bootstrap.Modal('#importModal').show());
+      $('#btnDoImport').addEventListener('click', importJSONFromText);
+      $('#btnCopyExport').addEventListener('click', ()=>{ navigator.clipboard.writeText($('#exportText').value); });
+
+      $('#btnSaveAll').addEventListener('click', ()=>{ saveStateToCookie(); showActionToast({title:'Saved', body:'<div class="monosmall">Encounter saved to cookies.</div>', durationMs:4000}); });
+      $('#btnForgetAll').addEventListener('click', ()=>{
+        if (confirm('This will clear the encounter from cookies. Continue?')) {
+          eraseCookie(CK_APP_STATE); appState.mobs=[]; saveStateToCookie(); renderMobs(); renderInitiativeOrder();
+        }
+      });
+
+      $$('.filterAlive').forEach(cb => cb.addEventListener('change', renderMobs));
+      $('#searchInput').addEventListener('input', renderMobs);
+      $('#btnClearSearch').addEventListener('click', ()=>{ $('#searchInput').value=''; renderMobs(); });
+
+      // Keyboard shortcuts
+      document.addEventListener('keydown', (e)=>{
+        if (e.key === 'r' || e.key === 'R') { rollAllMobInitiatives(); }
+        if (e.key === '/') { e.preventDefault(); $('#searchInput').focus(); }
+      });
+    });
+  </script>
+</body>
+</html>
