@@ -293,12 +293,33 @@
       return row}
     function renderCoins(coins){const c=coins||{}; return el('div',{class:'d-flex flex-wrap gap-2 monosmall'},
       el('span',{class:'pill'},`cp ${c.cp||0}`), el('span',{class:'pill'},`sp ${c.sp||0}`), el('span',{class:'pill'},`gp ${c.gp||0}`), el('span',{class:'pill'},`pp ${c.pp||0}`))}
-    function renderActionList(m,list){ if(!list?.length) return el('div',{class:'text-secondary small'},'—');
-      const wrap=el('div',{class:'vstack gap-2'}); list.forEach((a,i)=>{const btn=el('button',{class:'btn btn-outline-light btn-sm'},a.name||`Action ${i+1}`); btn.addEventListener('click',()=>performAction(m,a));
-        const meta=[]; if(a.type) meta.push(a.type); if(a.range) meta.push(a.range); if(a.attackBonus!==undefined) meta.push(`+${a.attackBonus} to hit`);
-        if(a.damage?.length) meta.push(a.damage.map(d=>`${d.dice}${d.type?(' '+d.type):''}`).join(' + '));
-        const desc=el('div',{class:'small text-secondary'}, meta.join(' • ')||'—'); wrap.append(el('div',{class:'d-grid gap-1'},btn,desc)); if(a.notes) wrap.append(el('div',{class:'small'},a.notes));});
-      return wrap}
+
+
+    function renderActionList(mob, list) {
+      const arr = Array.isArray(list) ? list : [];
+      if (!arr.length) return el('div', { class: 'text-secondary small' }, '—');
+
+      const wrap = el('div', { class: 'vstack gap-2' });
+      arr.forEach((a, idx) => {
+        const btn = el('button', { class: 'btn btn-outline-light btn-sm' }, a.name || `Action ${idx + 1}`);
+        btn.addEventListener('click', () => performAction(mob, a));
+
+        const meta = [];
+        if (a.type) meta.push(a.type);
+        if (a.range) meta.push(a.range);
+        if (a.attackBonus !== undefined && a.attackBonus !== null) meta.push(`+${a.attackBonus} to hit`);
+        if (Array.isArray(a.damage) && a.damage.length) meta.push(a.damage.map(d => `${d.dice}${d.type ? (' ' + d.type) : ''}`).join(' + '));
+
+        const desc = el('div', { class: 'small text-secondary' }, meta.join(' • ') || '—');
+        wrap.append(el('div', { class: 'd-grid gap-1' }, btn, desc));
+        if (a.notes) wrap.append(el('div', { class: 'small' }, a.notes));
+      });
+      return wrap;
+    }
+
+
+
+
     function renderConditionsEditor(m){const ALL=['blinded','charmed','deafened','frightened','grappled','incapacitated','invisible','paralyzed','petrified','poisoned','prone','restrained','stunned','unconscious'];
       const row=el('div',{class:'d-flex flex-wrap gap-2'}); const conds=new Set(m.conditions||[]);
       ALL.forEach(c=>{const chip=el('span',{class:'chip pointer '+(conds.has(c)?'border-success':'' )},el('i',{class:'bi bi-dot'}),c);
@@ -358,7 +379,9 @@
     function renderMobs(){
       const area=$('#mobsArea'); area.innerHTML='';
       const filters={alive:$('#filterAlive').checked,down:$('#filterDown').checked,dead:$('#filterDead').checked,search:($('#searchInput').value||'').trim().toLowerCase()};
-      const mobsSorted=[...appState.mobs].sort((a,b)=>a.name.localeCompare(b.name));
+      const allMobs = Array.isArray(appState.mobs) ? appState.mobs : [];
+      const mobsSorted = [...allMobs].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
       const visible=mobsSorted.filter(m=>{const s=statusOfMob(m);
         if(s==='alive'&&!filters.alive) return false; if(s==='down'&&!filters.down) return false; if(s==='dead'&&!filters.dead) return false;
         if(filters.search){const blob=[m.name,...(m.traits?.map(t=>t.name)||[]),...(appState.encounter?.style||[])].join(' ').toLowerCase(); if(!blob.includes(filters.search)) return false}
@@ -404,14 +427,101 @@
     function importJSONFromText(){const txt=$('#importText').value; try{const obj=JSON.parse(txt); if(!obj||!obj.mobs) throw new Error('Invalid structure'); appState=obj; saveStateToCookie(); renderPlayers(); renderMobs(); renderInitiativeOrder(); bootstrap.Modal.getInstance('#importModal')?.hide()}catch(e){alert('Invalid JSON.')}}
 
     // ---------- OpenAI generation (Chat Completions with fallbacks) ----------
-    function normalizeMob(m){return{
-      id:m.id||uuidv4(), name:m.name||'Unnamed', level:Number(m.level??appState.encounter.levelTarget??3), ac:Number(m.ac??12),
-      hp:Object.assign({current:1,max:1,temp:0}, m.hp||{}), movement:m.movement||{walk:30}, initiative:m.initiative??'',
-      stats:Object.assign({str:10,dex:10,con:10,int:10,wis:10,cha:10}, m.stats||{}), saves:m.saves||{}, skills:m.skills||{},
-      senses:m.senses||'—', languages:m.languages||['Common'], resistances:m.resistances||[], immunities:m.immunities||[], vulnerabilities:m.vulnerabilities||[],
-      traits:m.traits||[], actions:Array.isArray(m.actions)&&m.actions.length?m.actions:[{name:'Weapon Attack',type:'weapon',range:'5 ft',attackBonus:modFromStat((m.stats||{}).str||10)+2,damage:[{dice:'1d6+2',type:'slashing'}],notes:'Basic attack'}],
-      spells:m.spells||[], inventory:m.inventory||{coins:{cp:0,sp:0,gp:0,pp:0},items:[]}, conditions:m.conditions||[], concentration:m.concentration||null,
-      deathSaves:m.deathSaves||{success:0,fail:0}, notes:m.notes||''}}
+    function normalizeMob(m) {
+  // Coerce movement to object { walk: number }
+  let movement = m.movement;
+  if (typeof movement === 'number') {
+    movement = { walk: movement };
+  } else if (!movement || typeof movement !== 'object') {
+    movement = { walk: 30 };
+  }
+
+  // Coerce senses to a readable string
+  let senses = m.senses;
+  if (senses && typeof senses === 'object') {
+    // Flatten common fields
+    const parts = [];
+    for (const [k, v] of Object.entries(senses)) {
+      parts.push(`${k}: ${v}`);
+    }
+    senses = parts.join(', ');
+  }
+  if (!senses || typeof senses !== 'string') senses = '—';
+
+  // Ensure arrays are arrays
+  const toArr = (x) => Array.isArray(x) ? x : (x == null ? [] : [x]);
+  const traits = toArr(m.traits).map(t => (typeof t === 'object' && t ? t : { name: String(t), text: '' }));
+  const actions = toArr(m.actions).map(a => (typeof a === 'object' && a ? a : { name: String(a) }));
+  const spells  = toArr(m.spells);
+  const languages = toArr(m.languages);
+  const resistances = toArr(m.resistances);
+  const immunities  = toArr(m.immunities);
+  const vulnerabilities = toArr(m.vulnerabilities);
+  const conditions = toArr(m.conditions);
+
+  // Inventory normalization
+  const inv = m.inventory && typeof m.inventory === 'object' ? m.inventory : {};
+  const coins = inv.coins && typeof inv.coins === 'object' ? inv.coins : {};
+  const items = toArr(inv.items);
+
+  // HP normalization
+  const hpIn = m.hp && typeof m.hp === 'object' ? m.hp : {};
+  const hp = {
+    current: Number(hpIn.current ?? 1),
+    max:     Number(hpIn.max ?? 1),
+    temp:    Number(hpIn.temp ?? 0)
+  };
+
+  // Stats normalization
+  const s = m.stats && typeof m.stats === 'object' ? m.stats : {};
+  const stats = {
+    str: Number(s.str ?? 10),
+    dex: Number(s.dex ?? 10),
+    con: Number(s.con ?? 10),
+    int: Number(s.int ?? 10),
+    wis: Number(s.wis ?? 10),
+    cha: Number(s.cha ?? 10),
+  };
+
+  // Ensure actions have sensible defaults for the UI
+  const safeActions = actions.length ? actions : [{
+    name: 'Weapon Attack',
+    type: 'weapon',
+    range: '5 ft',
+    attackBonus: modFromStat(stats.str) + 2,
+    damage: [{ dice: '1d6+2', type: 'slashing' }],
+    notes: 'Basic attack'
+  }];
+
+  return {
+    id: m.id || uuidv4(),
+    name: m.name || 'Unnamed',
+    level: Number(m.level ?? appState.encounter.levelTarget ?? 3),
+    ac: Number(m.ac ?? 12),
+    hp,
+    movement,
+    initiative: m.initiative ?? '',
+    stats,
+    saves: (m.saves && typeof m.saves === 'object') ? m.saves : {},
+    skills: (m.skills && typeof m.skills === 'object') ? m.skills : {},
+    senses,
+    languages,
+    resistances,
+    immunities,
+    vulnerabilities,
+    traits,
+    actions: safeActions,
+    spells,
+    inventory: { coins: { cp: Number(coins.cp||0), sp: Number(coins.sp||0), gp: Number(coins.gp||0), pp: Number(coins.pp||0) }, items },
+    conditions,
+    concentration: (m.concentration && typeof m.concentration === 'object') ? m.concentration : null,
+    deathSaves: (m.deathSaves && typeof m.deathSaves === 'object') ? { success: Number(m.deathSaves.success||0), fail: Number(m.deathSaves.fail||0) } : { success: 0, fail: 0 },
+    notes: m.notes || ''
+  };
+}
+
+
+
     function buildUserPrompt(levelTarget,levelVariation,wealthTier,styleAll,speciesSel,party,difficulty){
       return `Inputs:
 - Level target: ${levelTarget} (±${levelVariation})
@@ -443,12 +553,27 @@ Return a single JSON object with keys: schemaVersion (number), party, encounter,
 
     // Strip zero-width / smart spaces / non-ASCII from the API key
     function cleanApiKey(raw){
-      return (raw || '')
-        .normalize('NFKC')
-        // remove spaces incl. NBSP + zero-widths
-        .replace(/[\s\u00A0\u2000-\u200D\u2060\uFEFF]/g, '')
-        // remove anything outside printable ASCII
-        .replace(/[^\x21-\x7E]/g, '');
+      if (!raw) return "";
+      let s = String(raw);
+
+      // Trim whitespace (including Unicode)
+      s = s.trim();
+
+      // Remove leading BOM if present
+      if (s.charCodeAt(0) === 0xFEFF) s = s.slice(1);
+
+      // Strip surrounding quotes if pasted with " or '
+      if ((s.startsWith('"') && s.endsWith('"')) ||
+          (s.startsWith("'") && s.endsWith("'"))) {
+        s = s.slice(1, -1);
+      }
+
+      // Remove any character outside ISO-8859-1 printable range
+      s = s.replace(/[^\u0020-\u007E\u00A0-\u00FF]/g, "");
+
+      console.log(s)
+
+      return s;
     }
 
     async function generateEncounter(){
@@ -492,6 +617,15 @@ Constraints:
         let parsed=null;
         try{ parsed=JSON.parse(text) }catch(e){ // last resort: extract with regex
           const m=text.match(/{(?:[^{}]|{[^{}]*})*}/s); if(m){parsed=JSON.parse(m[0])} else { throw e }
+        }
+        if (parsed.party && typeof parsed.party === 'object') {
+          const p = parsed.party;
+          // Accept both pcCount/averageLevel and size/avgLevel
+          parsed.party = {
+            pcCount: Number(p.pcCount ?? p.size ?? appState.party.pcCount ?? 4),
+            averageLevel: Number(p.averageLevel ?? p.avgLevel ?? appState.party.averageLevel ?? 3),
+            playersInitiative: Array.isArray(p.playersInitiative) ? p.playersInitiative : []
+          };
         }
         if(!parsed?.mobs) throw new Error('No mobs in response.');
 
