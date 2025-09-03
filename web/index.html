@@ -425,15 +425,34 @@ Return a single JSON object with keys: schemaVersion (number), party, encounter,
     async function requestChatCompletions(apiKey, messages, responseFormat){
       const body={model:'gpt-4o-mini', messages, temperature:0.7};
       if(responseFormat) body.response_format=responseFormat;
-      const res=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Authorization':`Bearer ${apiKey}`,'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const headers = new Headers();
+      headers.set('Authorization', `Bearer ${apiKey}`);
+      headers.set('Content-Type', 'application/json');
+      
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers,            // <— use the Headers instance
+        body: JSON.stringify(body)
+      });
       if(!res.ok){const t=await res.text(); throw new Error(`OpenAI error ${res.status}: ${t}`)}
       const data=await res.json();
       const text=data?.choices?.[0]?.message?.content;
       if(!text) throw new Error('No content in response');
       return text;
     }
+
+    // Strip zero-width / smart spaces / non-ASCII from the API key
+    function cleanApiKey(raw){
+      return (raw || '')
+        .normalize('NFKC')
+        // remove spaces incl. NBSP + zero-widths
+        .replace(/[\s\u00A0\u2000-\u200D\u2060\uFEFF]/g, '')
+        // remove anything outside printable ASCII
+        .replace(/[^\x21-\x7E]/g, '');
+    }
+
     async function generateEncounter(){
-      const apiKey=$('#apiKey').value.trim(); if(!apiKey){alert('Enter your OpenAI API key first.');return}
+      const apiKey=cleanApiKey($('#apiKey').value.trim()); if(!apiKey){alert('Enter your OpenAI API key first.');return}
       // Gather inputs
       const levelTarget=Number($('#levelTarget').value||1), levelVariation=Number($('#levelVariation').value||0), wealthTier=$('#wealthTier').value;
       const style=$$('#topbar input.form-check-input:checked').map(c=>c.value);
@@ -501,7 +520,7 @@ Constraints:
       const setSpecies=new Set(appState.encounter.species||['Human']); Array.from($('#speciesSelect').options).forEach(o=>{if(setSpecies.has(o.value)) o.selected=true});
       renderPlayers(); renderMobs(); renderInitiativeOrder();
 
-      $('#btnSaveKey').addEventListener('click',()=>{setCookie(CK_API_KEY,$('#apiKey').value.trim()); showActionToast({title:'API key', body:'<div class="monosmall">Saved to cookie.</div>', durationMs:4000})});
+      $('#btnSaveKey').addEventListener('click',()=>{setCookie(CK_API_KEY,cleanApiKey($('#apiKey').value.trim())); showActionToast({title:'API key', body:'<div class="monosmall">Saved to cookie.</div>', durationMs:4000})});
       $('#btnForgetKey').addEventListener('click',()=>{eraseCookie(CK_API_KEY); $('#apiKey').value=''; showActionToast({title:'API key', body:'<div class="monosmall">Forgotten.</div>', durationMs:4000})});
       $('#btnGenerate').addEventListener('click',generateEncounter);
 
